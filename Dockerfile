@@ -15,6 +15,10 @@ ENV VITE_SERVER_URL=${VITE_SERVER_URL:-}
 # This is necessary for Bun workspaces to properly resolve dependencies
 COPY . .
 
+# Exclude mobile workspace from server/web image builds.
+# This avoids pulling React Native tarballs in CI/CD where they're not needed.
+RUN rm -rf apps/native
+
 # Install dependencies
 RUN bun install --frozen-lockfile
 
