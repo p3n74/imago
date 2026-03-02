@@ -5,7 +5,7 @@
 module.exports = {
   apps: [
     {
-      name: "aether-quickstart-server",
+      name: "imago-server",
       cwd: "./apps/server",
       script: "bun",
       args: "run dist/index.mjs",

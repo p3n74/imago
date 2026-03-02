@@ -1,92 +1,87 @@
-# Aether Quickstart
+# Imago
 
-A high-performance, full-stack monorepo powerhouse. Seamlessly bridging React Web, Expo Native, and tRPC Server with end-to-end type safety and production-ready architecture. This project is designed to be a starting point for building scalable applications with a focus on great developer experience and clean UI/UX.
+A private photo gallery with compressed previews and full-resolution download. Self-hosted with Better Auth and team management. Built with React, tRPC, Prisma, and PostgreSQL.
 
-## 🚀 Tech Stack
+## Tech Stack
 
 - **Framework**: [React](https://reactjs.org/) (Web) & [Expo](https://expo.dev/) (Native)
-- **Monorepo Management**: [Turborepo](https://turbo.build/)
-- **API Layer**: [tRPC](https://trpc.io/) for end-to-end type safety
+- **Monorepo**: [Turborepo](https://turbo.build/)
+- **API**: [tRPC](https://trpc.io/) for end-to-end type safety
 - **Database**: [Prisma](https://www.prisma.io/) with PostgreSQL
-- **Authentication**: [Better-Auth](https://better-auth.com/)
+- **Auth**: [Better-Auth](https://better-auth.com/)
 - **Router**: [TanStack Router](https://tanstack.com/router)
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/)
-- **State Management**: [TanStack Query](https://tanstack.com/query)
 - **Runtime**: [Bun](https://bun.sh/)
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ├── apps/
-│   ├── web/        # React + Vite web application
-│   ├── native/     # Expo / React Native mobile application
-│   └── server/     # Express backend server
+│   ├── web/        # React + Vite web app
+│   ├── native/     # Expo mobile app
+│   └── server/     # Express backend
 ├── packages/
-│   ├── api/        # Shared tRPC router definitions and logic
-│   ├── auth/       # Authentication configuration
-│   ├── db/         # Prisma schema and database client
-│   ├── config/     # Shared configuration (TSConfig, Biome)
-│   └── env/        # Type-safe environment variable management
+│   ├── api/        # tRPC routers
+│   ├── auth/       # Better Auth config
+│   ├── db/         # Prisma schema & client
+│   └── env/        # Type-safe env vars
 ```
 
-## 🛠️ Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) installed on your machine.
-- A PostgreSQL database (local or hosted).
+- [Bun](https://bun.sh/)
+- PostgreSQL database
 
 ### Installation
 
-1. Clone this repository.
+1. Clone the repository.
 2. Install dependencies:
    ```bash
    bun install
    ```
-3. Copy the environment variables:
+3. Copy env files:
    ```bash
-   cp .env.example .env
-   # Also copy .env.example in apps/server/ and apps/web/ if needed
+   cp apps/server/.env.example apps/server/.env
+   cp apps/web/.env.example apps/web/.env
    ```
-4. Set up the database:
+4. Apply database schema:
    ```bash
    bun run db:push
+   ```
+5. Seed admin user:
+   ```bash
+   bun run seed-admin
    ```
 
 ### Development
 
-Start the development servers (web and server):
 ```bash
-bun run dev
+bun run dev:imago
 ```
 
-To run specifically:
-- `bun run dev:web`: Start only the web app
-- `bun run dev:server`: Start only the backend server
-- `bun run dev:native`: Start the mobile app
+Starts web (http://localhost:3001) and server (http://localhost:3000).
 
-## 🛡️ Authentication & Authorization
+Other scripts:
+- `bun run dev:web` – web only
+- `bun run dev:server` – server only
+- `bun run dev:native` – mobile app
 
-This template uses **Better-Auth** for secure authentication. 
-It includes a generic role-based authorization system:
-- **Whitelisted Access**: Only users added to the `AuthorizedUser` table can access protected data.
-- **Roles**: Supports `ADMIN` and `USER` roles out of the box.
+### Photo Import
 
-## 📡 API Development
+1. Copy your photos to `./import/photos` (or set `PHOTOS_IMPORT_PATH` in `.env`).
+2. Run the import script:
+   ```bash
+   bun run photos:import
+   ```
 
-API routes are defined in `packages/api/src/routers`. 
-- Add new procedures to `index.ts` or create new router files.
-- Procedures can be `public`, `protected` (auth required), `whitelisted` (approved user), or `admin`.
+## Auth & Team
 
-## 🎨 UI & Components
+- **Whitelist**: Only users in `AuthorizedUser` can access the app.
+- **Roles**: `ADMIN` (manage team) and `USER` (view photos).
+- Manage users on the Team page.
 
-We use **shadcn/ui**. Components are located in `apps/web/src/components/ui`. 
-To add new components:
-```bash
-cd apps/web
-bun x shadcn@latest add [component-name]
-```
+## License
 
-## 📄 License
-
-This project is licensed under the MIT License.
+MIT

@@ -81,6 +81,7 @@ console.log("Initializing application modules (async)...");
       corsModule,
       { createContext, setWsEmitter, setPresenceGetter },
       { emitToAll, emitToUser, getPresenceMap, initWebSocket },
+      { handlePreview, handleDownload },
     ] = await Promise.all([
       import("@template/api/routers/index"),
       import("@template/auth"),
@@ -89,6 +90,7 @@ console.log("Initializing application modules (async)...");
       import("cors"),
       import("@template/api/context"), // This will import db internally
       import("./websocket"),
+      import("./photos-routes"),
     ]);
 
     const cors = corsModule.default;
@@ -103,9 +105,20 @@ console.log("Initializing application modules (async)...");
     });
     setPresenceGetter(() => getPresenceMap());
 
+    // In dev, allow both localhost and 127.0.0.1 (browsers treat them as different origins)
+    const corsOrigins = env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+    if (corsOrigins.length > 0) {
+      const base = corsOrigins[0];
+      const m = base.match(/^(https?:\/\/)([^:/]+)(:\d+)?$/);
+      if (m && (m[2] === "localhost" || m[2] === "127.0.0.1")) {
+        const other = m[1] + (m[2] === "localhost" ? "127.0.0.1" : "localhost") + (m[3] ?? "");
+        if (!corsOrigins.includes(other)) corsOrigins.push(other);
+      }
+    }
+
     app.use(
       cors({
-        origin: env.CORS_ORIGIN,
+        origin: corsOrigins.length > 0 ? corsOrigins : env.CORS_ORIGIN,
         methods: ["GET", "POST", "OPTIONS"],
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true,
@@ -124,6 +137,16 @@ console.log("Initializing application modules (async)...");
     );
 
     app.use(express.json());
+
+    // Photo file serving (requires auth + whitelist)
+    app.get(
+      "/api/photos/preview/:id",
+      (req, res, next) => handlePreview(req, res).catch(next)
+    );
+    app.get(
+      "/api/photos/download/:id",
+      (req, res, next) => handleDownload(req, res).catch(next)
+    );
 
     // Health check endpoint for WebSocket status
     app.get("/ws/health", (_req, res) => {
@@ -146,8 +169,8 @@ if (existsSync(webDistPath)) {
   
   // Fallback to index.html for SPA routing
   app.get("/*path", (req, res, next) => {
-    // Don't intercept TRPC or Auth routes
-    if (req.path.startsWith("/trpc") || req.path.startsWith("/api/auth")) {
+    // Don't intercept API routes (trpc, auth, photos, etc.)
+    if (req.path.startsWith("/trpc") || req.path.startsWith("/api")) {
       return next();
     }
     const indexPath = path.join(webDistPath, "index.html");

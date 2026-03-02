@@ -3,6 +3,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
+    "photos:import": "bun run scripts/import-photos.ts",
     "build": "tsdown",
     "check-types": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
@@ -10,6 +11,7 @@
     "start": "bun run dist/index.mjs"
   },
   "dependencies": {
+    "sharp": "^0.33.5",
     "@template/api": "workspace:*",
     "@template/auth": "workspace:*",
     "@template/db": "workspace:*",

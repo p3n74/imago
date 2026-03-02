@@ -44,7 +44,7 @@ function RouteComponent() {
     <div className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-4 px-3 py-4 sm:gap-6 sm:px-4 sm:py-6">
       <div className="flex flex-col gap-2">
         <p className="text-xs font-medium uppercase tracking-widest text-primary">Dashboard</p>
-        <h1 className="text-3xl font-bold tracking-tight">Welcome to the Template</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome to Imago</h1>
         <p className="text-muted-foreground">
           Hello, {session.data?.user?.name ?? "User"}. You are logged in with the role: {roleQuery.data?.role ?? "None"}
         </p>

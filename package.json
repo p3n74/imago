@@ -1,5 +1,5 @@
 {
-  "name": "aether-quickstart",
+  "name": "imago",
   "private": true,
   "workspaces": {
     "packages": [
@@ -24,6 +24,7 @@
   "type": "module",
   "scripts": {
     "dev": "turbo dev",
+    "dev:imago": "turbo dev --filter=web --filter=server",
     "start": "turbo run start --filter=server --filter=web",
     "build": "turbo build",
     "check-types": "turbo check-types",
@@ -34,11 +35,13 @@
     "db:studio": "turbo -F @template/db db:studio",
     "db:generate": "turbo -F @template/db db:generate",
     "db:migrate": "turbo -F @template/db db:migrate",
+    "photos:import": "bun run apps/server/scripts/import-photos.ts",
+    "seed-admin": "turbo -F @template/db seed-admin",
     "check": "biome check --write .",
     "start:prod": "pm2 start ecosystem.config.cjs --env production",
     "pm2:save": "pm2 save",
-    "stop:prod": "pm2 stop ui-ux-template-server",
-    "restart:prod": "pm2 restart ui-ux-template-server --env production"
+    "stop:prod": "pm2 stop imago-server",
+    "restart:prod": "pm2 restart imago-server --env production"
   },
   "dependencies": {
     "@template/env": "workspace:*",

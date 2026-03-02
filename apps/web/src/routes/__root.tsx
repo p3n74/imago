@@ -1,11 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { HeadContent, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
+import { HeadContent, Outlet, createRootRouteWithContext, useLocation } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import type { trpc } from "@/utils/trpc";
 
+import { authClient } from "@/lib/auth-client";
 import Header from "@/components/header";
 import { BackgroundProvider, useBackground } from "@/components/background-provider";
 import { ChatPopup } from "@/components/chat-popup";
@@ -38,11 +39,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "Aether Quickstart",
+        title: "Imago",
       },
       {
         name: "description",
-        content: "A modern, production-ready fullstack monorepo template.",
+        content: "Private photo gallery with compressed previews and full-resolution download.",
       },
     ],
     links: [
@@ -55,6 +56,10 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
+  const { pathname } = useLocation();
+  const { data: session } = authClient.useSession();
+  const isSignedOutHome = pathname === "/" && !session;
+
   return (
     <>
       <HeadContent />
@@ -68,8 +73,8 @@ function RootComponent() {
           <BackgroundProvider>
             <TabTitleUnread />
             <BgWrapper>
-              <Header className="shrink-0" />
-              <main className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-6 sm:pb-8">
+              {!isSignedOutHome && <Header className="shrink-0" />}
+              <main className={`min-h-0 min-w-0 flex-1 overflow-y-auto ${isSignedOutHome ? "" : "pb-6 sm:pb-8"}`}>
                 <Outlet />
               </main>
             </BgWrapper>

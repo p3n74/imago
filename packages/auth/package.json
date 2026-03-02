@@ -15,7 +15,6 @@
     "@template/db": "workspace:*",
     "@template/env": "workspace:*",
     "@prisma/client": "catalog:",
-    "@prisma/extension-accelerate": "^3.0.1",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "zod": "catalog:"

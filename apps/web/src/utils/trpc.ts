@@ -19,10 +19,12 @@ export const queryClient = new QueryClient({
   }),
 });
 
+const apiBase = import.meta.env.DEV ? "" : env.VITE_SERVER_URL;
+
 export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpLink({
-      url: `${env.VITE_SERVER_URL}/trpc`,
+      url: `${apiBase}/trpc`,
       fetch(url, options) {
         return fetch(url, {
           ...options,

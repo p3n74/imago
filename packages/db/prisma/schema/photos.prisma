@@ -1,0 +1,17 @@
+model Photo {
+  id           String    @id @default(cuid())
+  filename     String
+  relativePath String // e.g. "Family/2024/Summer/IMG_001.jpg" - preserves folder structure
+  album        String? // top-level folder name for grouping
+  mimeType     String
+  width        Int?
+  height       Int?
+  fileSize     Int?
+  takenAt      DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([album])
+  @@index([takenAt])
+  @@index([createdAt])
+  @@map("photo")
+}

@@ -13,5 +13,53 @@ export default defineConfig({
   },
   server: {
     port: 3001,
+    proxy: {
+      "/api": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+        cookieDomainRewrite: { "*": "localhost" },
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq, req) => {
+            if (req.headers.cookie) {
+              proxyReq.setHeader("cookie", req.headers.cookie);
+            }
+          });
+          proxy.on("proxyRes", (proxyRes) => {
+            const cookies = proxyRes.headers["set-cookie"];
+            if (cookies) {
+              proxyRes.headers["set-cookie"] = cookies.map((cookie: string) =>
+                cookie
+                  .replace(/;\s*Secure/gi, "")
+                  .replace(/domain=[^;]+/gi, "domain=localhost")
+              );
+            }
+          });
+        },
+      },
+      "/trpc": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        secure: false,
+        cookieDomainRewrite: { "*": "localhost" },
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq, req) => {
+            if (req.headers.cookie) {
+              proxyReq.setHeader("cookie", req.headers.cookie);
+            }
+          });
+          proxy.on("proxyRes", (proxyRes) => {
+            const cookies = proxyRes.headers["set-cookie"];
+            if (cookies) {
+              proxyRes.headers["set-cookie"] = cookies.map((cookie: string) =>
+                cookie
+                  .replace(/;\s*Secure/gi, "")
+                  .replace(/domain=[^;]+/gi, "domain=localhost")
+              );
+            }
+          });
+        },
+      },
+    },
   },
 });

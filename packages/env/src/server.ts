@@ -18,6 +18,8 @@ export const env = createEnv({
     HOST: z.string().optional().default("0.0.0.0"), // Bind address (0.0.0.0 for Cloud Run, localhost for local dev)
     // 32-byte key for AES-256-GCM (use base64 or any string; server hashes to 32 bytes). Set in production.
     CHAT_ENCRYPTION_KEY: z.string().min(16).optional().default("template-chat-dev-key"),
+    // Path where user copies their photo folder for bulk import (e.g. /data/photos or ./import/photos)
+    PHOTOS_IMPORT_PATH: z.string().optional().default("./import/photos"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

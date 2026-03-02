@@ -48,3 +48,9 @@ coverage
 .cache
 tmp
 temp
+
+# Photo storage (user data)
+import/
+storage/photos/
+
+sample/

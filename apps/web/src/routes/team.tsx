@@ -6,7 +6,7 @@ import { Loader2, Trash2, UserPlus, Shield } from "lucide-react";
 import { NotWhitelistedView } from "@/components/not-whitelisted-view";
 
 import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -270,10 +270,8 @@ function TeamRoute() {
               </select>
             </div>
             <DialogFooter className="mt-6">
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  Cancel
-                </Button>
+              <DialogClose className={buttonVariants({ variant: "outline" })}>
+                Cancel
               </DialogClose>
               <Button type="submit" disabled={addMemberMutation.isPending}>
                 {addMemberMutation.isPending ? "Adding..." : "Add User"}

@@ -29,6 +29,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "seed-data": "bun run ./seed-data.ts"
+    "seed-data": "bun run ./seed-data.ts",
+    "seed-admin": "bun run ./seed-admin.ts"
   }
 }

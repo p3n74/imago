@@ -10,7 +10,16 @@ import {
   CheckCircle2,
   Users,
   Loader2,
+  Image,
+  LogIn,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 import { authClient } from "@/lib/auth-client";
 import { NotWhitelistedView } from "@/components/not-whitelisted-view";
@@ -89,14 +98,24 @@ function SignedInHome({ error }: { error?: string }) {
         )}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 max-w-2xl mx-auto">
+      <div className="grid gap-6 md:grid-cols-3 max-w-3xl mx-auto">
         <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => window.location.href = '/dashboard'}>
           <CardHeader>
             <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
               <LayoutDashboard className="text-primary" />
             </div>
-            <CardTitle>Go to Dashboard</CardTitle>
-            <CardDescription>View your personalized workspace</CardDescription>
+            <CardTitle>Dashboard</CardTitle>
+            <CardDescription>View your workspace</CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card className="hover:border-primary/50 transition-colors cursor-pointer" onClick={() => window.location.href = '/photos'}>
+          <CardHeader>
+            <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
+              <Image className="text-primary" />
+            </div>
+            <CardTitle>Photos</CardTitle>
+            <CardDescription>Browse and download your photos</CardDescription>
           </CardHeader>
         </Card>
 
@@ -105,8 +124,8 @@ function SignedInHome({ error }: { error?: string }) {
             <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
               <Users className="text-primary" />
             </div>
-            <CardTitle>Manage Team</CardTitle>
-            <CardDescription>Configure users and permissions</CardDescription>
+            <CardTitle>Team</CardTitle>
+            <CardDescription>Manage users and permissions</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -115,72 +134,87 @@ function SignedInHome({ error }: { error?: string }) {
 }
 
 function SignedOutHome() {
+  const [signInOpen, setSignInOpen] = useState(false);
+
   return (
-    <div className="flex flex-col min-h-[calc(100vh-80px)]">
-      {/* Hero Section */}
-      <section className="flex-1 flex flex-col items-center justify-center px-4 py-12 sm:py-24 text-center">
-        <div className="max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-6 animate-fade-in">
-            <Zap className="w-3 h-3 fill-current" />
-            <span>Modern UI/UX Template</span>
-          </div>
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
-            The ultimate foundation for your <span className="text-primary">SaaS project</span>
-          </h1>
-          <p className="text-lg sm:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            A production-ready monorepo template featuring React, tRPC, Prisma, and Better-Auth. 
-            Focus on your features, not the boilerplate.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button size="lg" asChild className="px-8 h-12 text-base font-semibold">
-              <a href="#login">Get Started</a>
-            </Button>
-            <Button size="lg" variant="outline" asChild className="px-8 h-12 text-base font-semibold gap-2">
-              <a href="https://github.com">
-                <Github className="w-5 h-5" />
-                View Source
-              </a>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Grid */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4">Everything you need included</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">
-              We've pre-configured the best tools in the ecosystem so you can build with confidence.
+    <>
+      <div className="h-screen overflow-y-auto snap-y snap-mandatory scroll-smooth">
+        {/* Hero Slide */}
+        <section className="min-h-screen w-full snap-start snap-always flex flex-col items-center justify-center px-4 py-12 sm:py-24 text-center">
+          <div className="max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-6 animate-fade-in">
+              <Zap className="w-3 h-3 fill-current" />
+              <span>Your memories, beautifully organized</span>
+            </div>
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+              <span className="text-primary">Imago</span>
+            </h1>
+            <p className="text-lg sm:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+              A Private Photogallery of the Citadel
             </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+              <Button
+                size="lg"
+                className="px-8 h-12 text-base font-semibold gap-2 whitespace-nowrap shrink-0"
+                onClick={() => setSignInOpen(true)}
+              >
+                <LogIn className="w-5 h-5 shrink-0" />
+                Sign In
+              </Button>
+              <Button size="lg" variant="outline" asChild className="px-8 h-12 text-base font-semibold gap-2 whitespace-nowrap shrink-0">
+                <a href="https://github.com/p3n74/imago">
+                  <Github className="w-5 h-5" />
+                  View Source
+                </a>
+              </Button>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={<Shield className="w-6 h-6 text-primary" />}
-              title="Secure Auth"
-              description="Full authentication suite with Better-Auth. Supports Google, GitHub, and more out of the box."
-            />
-            <FeatureCard 
-              icon={<Zap className="w-6 h-6 text-primary" />}
-              title="End-to-End Type Safety"
-              description="Built with tRPC for a seamless developer experience and zero-runtime overhead type checking."
-            />
-            <FeatureCard 
-              icon={<CheckCircle2 className="w-6 h-6 text-primary" />}
-              title="Clean UI/UX"
-              description="Beautifully designed components using shadcn/ui, Tailwind CSS, and TanStack Router."
-            />
-          </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Login Section */}
-      <section id="login" className="py-20 flex items-center justify-center bg-background">
-        <div className="w-full max-w-md px-4">
-          <LoginCard />
-        </div>
-      </section>
-    </div>
+        {/* Features Slide */}
+        <section className="min-h-screen w-full snap-start snap-always flex flex-col items-center justify-center py-20 bg-muted/30">
+          <div className="max-w-6xl mx-auto px-4 w-full">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold mb-4">Built for the way you share</h2>
+              <p className="text-muted-foreground max-w-xl mx-auto">
+                Invite who you trust. Keep your photos yours.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <FeatureCard 
+                icon={<Shield className="w-6 h-6 text-primary" />}
+                title="Secure Auth"
+                description="Whitelist-only access. Only people you add can see your gallery."
+              />
+              <FeatureCard 
+                icon={<Image className="w-6 h-6 text-primary" />}
+                title="Compressed Previews"
+                description="Quick browsing with WebP. Download originals when you need the full file."
+              />
+              <FeatureCard 
+                icon={<CheckCircle2 className="w-6 h-6 text-primary" />}
+                title="Team Management"
+                description="Add or remove users from the Team page. You control who gets in."
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <Dialog open={signInOpen} onOpenChange={setSignInOpen}>
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Sign In</DialogTitle>
+            <DialogDescription>
+              Access your account via Google
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            <LoginCard onSuccess={() => setSignInOpen(false)} />
+          </div>
+        </DialogPopup>
+      </Dialog>
+    </>
   );
 }
 
@@ -198,7 +232,7 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode, titl
   );
 }
 
-function LoginCard() {
+function LoginCard({ onSuccess }: { onSuccess?: () => void }) {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleGoogleSignIn = async () => {
@@ -209,6 +243,7 @@ function LoginCard() {
         provider: "google",
         callbackURL,
       });
+      onSuccess?.();
     } catch (error) {
       toast.error("Google sign in failed. Please try again.");
     } finally {
@@ -217,26 +252,18 @@ function LoginCard() {
   };
 
   return (
-    <Card className="border-primary/20 shadow-xl">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">Sign In</CardTitle>
-        <CardDescription>
-          Access your account via Google
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Button
-          type="button"
-          className="w-full h-12 text-base"
-          onClick={handleGoogleSignIn}
-          disabled={isGoogleLoading}
-        >
-          {isGoogleLoading ? "Connecting..." : "Continue with Google"}
-        </Button>
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          By signing in, you agree to our Terms of Service and Privacy Policy.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Button
+        type="button"
+        className="w-full h-12 text-base"
+        onClick={handleGoogleSignIn}
+        disabled={isGoogleLoading}
+      >
+        {isGoogleLoading ? "Connecting..." : "Continue with Google"}
+      </Button>
+      <p className="text-center text-xs text-muted-foreground">
+        By signing in, you agree to our Terms of Service and Privacy Policy.
+      </p>
+    </div>
   );
 }

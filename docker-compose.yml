@@ -1,23 +1,42 @@
+# Imago - Coolify-ready deployment
+# Set env vars in Coolify UI; mount volumes for photos and storage
+# Server serves both API and web app; copy photos to /data/photos then run: bun run photos:import
 services:
+  # Optional: use external PostgreSQL or uncomment below
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  #     POSTGRES_DB: ${POSTGRES_DB:-postgres}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
+
   server:
     build:
       context: .
-      target: server
+      target: runner
+      args:
+        - VITE_SERVER_URL=${VITE_SERVER_URL:-http://localhost:3000}
     ports:
       - "3000:3000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:5173}
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      # Add other env vars as needed
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:3000}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - PHOTOS_IMPORT_PATH=${PHOTOS_IMPORT_PATH:-/data/photos}
+    volumes:
+      - photos_import:/data/photos
+      - photos_previews:/app/storage/photos/previews
 
-  web:
-    build:
-      context: .
-      target: web
-      args:
-        - VITE_SERVER_URL=${VITE_SERVER_URL:-http://localhost:3000}
-    ports:
-      - "80:80"
-    depends_on:
-      - server
+volumes:
+  photos_import:
+  photos_previews:

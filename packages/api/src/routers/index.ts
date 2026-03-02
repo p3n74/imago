@@ -6,6 +6,7 @@ import { WS_EVENTS, type Context, type WsEmitter } from "../context";
 import { teamRouter } from "./team";
 import { chatRouter } from "./chat";
 import { presenceRouter } from "./presence";
+import { photosRouter } from "./photos";
 
 // Helper function to create activity logs and emit WebSocket event
 async function logActivity(
@@ -47,6 +48,7 @@ export const appRouter = router({
   team: teamRouter,
   chat: chatRouter,
   presence: presenceRouter,
+  photos: photosRouter,
 
   privateData: protectedProcedure.query(({ ctx }) => {
     return {

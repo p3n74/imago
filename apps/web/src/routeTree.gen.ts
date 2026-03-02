@@ -10,11 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TeamRouteImport } from './routes/team'
-import { Route as ReceiptsRouteImport } from './routes/receipts'
+import { Route as PhotosRouteImport } from './routes/photos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as BudgetsRouteImport } from './routes/budgets'
-import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as IndexRouteImport } from './routes/index'
 
 const TeamRoute = TeamRouteImport.update({
@@ -22,9 +20,9 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReceiptsRoute = ReceiptsRouteImport.update({
-  id: '/receipts',
-  path: '/receipts',
+const PhotosRoute = PhotosRouteImport.update({
+  id: '/photos',
+  path: '/photos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -37,16 +35,6 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BudgetsRoute = BudgetsRouteImport.update({
-  id: '/budgets',
-  path: '/budgets',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountsRoute = AccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -55,69 +43,39 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/accounts': typeof AccountsRoute
-  '/budgets': typeof BudgetsRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
-  '/receipts': typeof ReceiptsRoute
+  '/photos': typeof PhotosRoute
   '/team': typeof TeamRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/accounts': typeof AccountsRoute
-  '/budgets': typeof BudgetsRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
-  '/receipts': typeof ReceiptsRoute
+  '/photos': typeof PhotosRoute
   '/team': typeof TeamRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/accounts': typeof AccountsRoute
-  '/budgets': typeof BudgetsRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
-  '/receipts': typeof ReceiptsRoute
+  '/photos': typeof PhotosRoute
   '/team': typeof TeamRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/accounts'
-    | '/budgets'
-    | '/dashboard'
-    | '/login'
-    | '/receipts'
-    | '/team'
+  fullPaths: '/' | '/dashboard' | '/login' | '/photos' | '/team'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/accounts'
-    | '/budgets'
-    | '/dashboard'
-    | '/login'
-    | '/receipts'
-    | '/team'
-  id:
-    | '__root__'
-    | '/'
-    | '/accounts'
-    | '/budgets'
-    | '/dashboard'
-    | '/login'
-    | '/receipts'
-    | '/team'
+  to: '/' | '/dashboard' | '/login' | '/photos' | '/team'
+  id: '__root__' | '/' | '/dashboard' | '/login' | '/photos' | '/team'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AccountsRoute: typeof AccountsRoute
-  BudgetsRoute: typeof BudgetsRoute
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
-  ReceiptsRoute: typeof ReceiptsRoute
+  PhotosRoute: typeof PhotosRoute
   TeamRoute: typeof TeamRoute
 }
 
@@ -130,11 +88,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/receipts': {
-      id: '/receipts'
-      path: '/receipts'
-      fullPath: '/receipts'
-      preLoaderRoute: typeof ReceiptsRouteImport
+    '/photos': {
+      id: '/photos'
+      path: '/photos'
+      fullPath: '/photos'
+      preLoaderRoute: typeof PhotosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -151,20 +109,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/budgets': {
-      id: '/budgets'
-      path: '/budgets'
-      fullPath: '/budgets'
-      preLoaderRoute: typeof BudgetsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/accounts': {
-      id: '/accounts'
-      path: '/accounts'
-      fullPath: '/accounts'
-      preLoaderRoute: typeof AccountsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -177,11 +121,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AccountsRoute: AccountsRoute,
-  BudgetsRoute: BudgetsRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
-  ReceiptsRoute: ReceiptsRoute,
+  PhotosRoute: PhotosRoute,
   TeamRoute: TeamRoute,
 }
 export const routeTree = rootRouteImport
