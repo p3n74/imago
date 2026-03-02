@@ -15,12 +15,10 @@ ENV VITE_SERVER_URL=${VITE_SERVER_URL:-}
 # This is necessary for Bun workspaces to properly resolve dependencies
 COPY . .
 
-# Exclude mobile workspace from server/web image builds.
-# This avoids pulling React Native tarballs in CI/CD where they're not needed.
-RUN rm -rf apps/native
-
 # Install dependencies
-RUN bun install --frozen-lockfile
+# Keep lockfile strict for reproducible builds.
+# Retry once after clearing Bun cache to handle transient/corrupt tarball fetches.
+RUN bun install --frozen-lockfile || (rm -rf /root/.bun/install/cache && bun install --frozen-lockfile)
 
 # Generate Prisma Client
 RUN bun run db:generate
