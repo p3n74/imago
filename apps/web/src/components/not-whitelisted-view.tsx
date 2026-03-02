@@ -13,7 +13,7 @@ export function NotWhitelistedView() {
 
   const handleSignOut = async () => {
     await authClient.signOut();
-    navigate({ to: "/" });
+    navigate({ to: "/login" });
   };
 
   return (
@@ -30,8 +30,8 @@ export function NotWhitelistedView() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button variant="default" onClick={() => navigate({ to: "/" })}>
-            Back to Home
+          <Button variant="default" onClick={() => navigate({ to: "/photos" })}>
+            Back to Photos
           </Button>
           <Button variant="outline" onClick={handleSignOut}>
             Sign Out

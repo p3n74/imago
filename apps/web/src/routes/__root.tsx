@@ -58,7 +58,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 function RootComponent() {
   const { pathname } = useLocation();
   const { data: session } = authClient.useSession();
-  const isSignedOutHome = pathname === "/" && !session;
+  const isSignedOutLanding = pathname === "/login" && !session;
 
   return (
     <>
@@ -73,8 +73,8 @@ function RootComponent() {
           <BackgroundProvider>
             <TabTitleUnread />
             <BgWrapper>
-              {!isSignedOutHome && <Header className="shrink-0" />}
-              <main className={`min-h-0 min-w-0 flex-1 overflow-y-auto ${isSignedOutHome ? "" : "pb-6 sm:pb-8"}`}>
+              {!isSignedOutLanding && <Header className="shrink-0" />}
+              <main className={`min-h-0 min-w-0 flex-1 overflow-y-auto ${isSignedOutLanding ? "" : "pb-6 sm:pb-8"}`}>
                 <Outlet />
               </main>
             </BgWrapper>

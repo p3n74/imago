@@ -14,6 +14,36 @@ const _serverRoot = path.resolve(__dirname, "..");
 const PROJECT_ROOT = path.resolve(_serverRoot, "../..");
 
 const PREVIEWS_BASE = path.join(PROJECT_ROOT, "storage", "photos", "previews");
+const METRIC_TRAFFIC_TOTAL_BYTES = "traffic_total_bytes";
+
+async function incrementTrafficMetric(
+  bytesSent: number,
+  kind: "preview" | "download",
+): Promise<void> {
+  if (!Number.isFinite(bytesSent) || bytesSent <= 0) return;
+
+  const bytes = BigInt(bytesSent);
+  await Promise.all([
+    prisma.appMetric.upsert({
+      where: { key: METRIC_TRAFFIC_TOTAL_BYTES },
+      create: {
+        key: METRIC_TRAFFIC_TOTAL_BYTES,
+        value: bytes,
+      },
+      update: {
+        value: {
+          increment: bytes,
+        },
+      },
+    }),
+    prisma.trafficMetricEvent.create({
+      data: {
+        bytes,
+        kind,
+      },
+    }),
+  ]);
+}
 
 async function requireWhitelistedUser(req: Request): Promise<{ email: string } | null> {
   const session = await auth.api.getSession({
@@ -68,6 +98,7 @@ export async function handlePreview(req: Request, res: Response): Promise<void> 
   res.setHeader("Content-Type", "image/webp");
   res.setHeader("Content-Length", stats.size);
   res.setHeader("Cache-Control", "public, max-age=86400");
+  await incrementTrafficMetric(stats.size, "preview");
 
   const stream = createReadStream(filePath);
   stream.pipe(res);
@@ -102,6 +133,7 @@ export async function handleDownload(req: Request, res: Response): Promise<void>
   res.setHeader("Content-Type", photo.mimeType);
   res.setHeader("Content-Length", stats.size);
   res.setHeader("Content-Disposition", `attachment; filename="${photo.filename}"`);
+  await incrementTrafficMetric(stats.size, "download");
 
   const stream = createReadStream(filePath);
   stream.pipe(res);

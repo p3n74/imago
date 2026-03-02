@@ -28,14 +28,12 @@ export default function Header() {
     await authClient.signOut();
     setIsSignOutOpen(false);
     setIsMobileMenuOpen(false);
-    navigate({ to: "/" });
+    navigate({ to: "/login" });
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  const publicLinks = [
-    { to: "/", label: "Home" },
-  ] as const;
+  const publicLinks = [] as const;
 
   const authLinks = [
     { to: "/dashboard", label: "Dashboard" },
@@ -53,7 +51,7 @@ export default function Header() {
         <nav className="glass flex items-center justify-between gap-2 rounded-2xl px-3 py-2.5 sm:px-4">
           <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-8">
             <Link
-              to="/"
+              to="/photos"
               className="flex shrink-0 items-center gap-2 font-semibold tracking-tight text-foreground transition-opacity hover:opacity-80"
             >
               <Layout className="h-8 w-8 text-primary" />
@@ -106,7 +104,7 @@ export default function Header() {
                 </Button>
               </>
             ) : (
-              <Link to="/" hash="login" className="hidden md:block">
+              <Link to="/login" className="hidden md:block">
                 <Button variant="default" size="sm">
                   Sign In
                 </Button>
@@ -189,7 +187,7 @@ export default function Header() {
           )}
           {!session && (
             <DialogFooter className="mt-auto border-t border-border/50 pt-4">
-              <Link to="/" hash="login" onClick={closeMobileMenu} className="w-full">
+              <Link to="/login" onClick={closeMobileMenu} className="w-full">
                 <Button variant="default" className="w-full">
                   Sign In
                 </Button>
@@ -204,7 +202,7 @@ export default function Header() {
           <DialogHeader>
             <DialogTitle>Sign Out</DialogTitle>
             <DialogDescription>
-              Are you sure you want to sign out? You will be redirected to the home page.
+              Are you sure you want to sign out? You will be redirected to sign in.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

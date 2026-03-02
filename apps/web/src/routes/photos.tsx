@@ -104,7 +104,7 @@ export const Route = createFileRoute("/photos")({
   beforeLoad: async () => {
     const session = await authClient.getSession();
     if (!session.data) {
-      throw redirect({ to: "/" });
+      throw redirect({ to: "/login" });
     }
     return { session };
   },

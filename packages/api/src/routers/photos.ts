@@ -96,4 +96,112 @@ export const photosRouter = router({
 
     return albums.map((a) => a.album).filter((a): a is string => !!a);
   }),
+
+  getAnalytics: whitelistedProcedure.query(async ({ ctx }) => {
+    const [photoCount, photoSizeAgg, totalTrafficMetric] = await Promise.all([
+      ctx.prisma.photo.count(),
+      ctx.prisma.photo.aggregate({
+        _sum: {
+          fileSize: true,
+        },
+      }),
+      ctx.prisma.appMetric.findUnique({
+        where: { key: "traffic_total_bytes" },
+      }),
+    ]);
+
+    return {
+      photoCount,
+      totalStorageBytes: photoSizeAgg._sum.fileSize ?? 0,
+      totalTrafficBytes: totalTrafficMetric?.value.toString() ?? "0",
+    };
+  }),
+
+  getAnalyticsSeries: whitelistedProcedure
+    .input(
+      z
+        .object({
+          days: z.number().int().min(7).max(365).optional().default(30),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const days = input?.days ?? 30;
+
+      const utcToday = new Date();
+      const end = new Date(
+        Date.UTC(
+          utcToday.getUTCFullYear(),
+          utcToday.getUTCMonth(),
+          utcToday.getUTCDate(),
+        ),
+      );
+      const start = new Date(end.getTime());
+      start.setUTCDate(start.getUTCDate() - (days - 1));
+      const endExclusive = new Date(end.getTime());
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+
+      const [photosBeforeStart, photosInRange, trafficInRange] = await Promise.all([
+        ctx.prisma.photo.count({
+          where: { createdAt: { lt: start } },
+        }),
+        ctx.prisma.photo.findMany({
+          where: {
+            createdAt: { gte: start, lt: endExclusive },
+          },
+          select: { createdAt: true },
+        }),
+        ctx.prisma.trafficMetricEvent.findMany({
+          where: {
+            createdAt: { gte: start, lt: endExclusive },
+          },
+          select: { createdAt: true, bytes: true },
+        }),
+      ]);
+
+      const photosAddedByDay = new Map<string, number>();
+      for (const photo of photosInRange) {
+        const key = photo.createdAt.toISOString().slice(0, 10);
+        photosAddedByDay.set(key, (photosAddedByDay.get(key) ?? 0) + 1);
+      }
+
+      const trafficBytesByDay = new Map<string, bigint>();
+      for (const event of trafficInRange) {
+        const key = event.createdAt.toISOString().slice(0, 10);
+        trafficBytesByDay.set(
+          key,
+          (trafficBytesByDay.get(key) ?? BigInt(0)) + (event.bytes ?? BigInt(0)),
+        );
+      }
+
+      let runningPhotosTotal = photosBeforeStart;
+      const points: Array<{
+        date: string;
+        photosAdded: number;
+        photosTotal: number;
+        trafficBytes: string;
+      }> = [];
+
+      for (let i = 0; i < days; i++) {
+        const day = new Date(start.getTime());
+        day.setUTCDate(start.getUTCDate() + i);
+        const key = day.toISOString().slice(0, 10);
+
+        const photosAdded = photosAddedByDay.get(key) ?? 0;
+        runningPhotosTotal += photosAdded;
+        const trafficBytes = trafficBytesByDay.get(key) ?? BigInt(0);
+
+        points.push({
+          date: key,
+          photosAdded,
+          photosTotal: runningPhotosTotal,
+          trafficBytes: trafficBytes.toString(),
+        });
+      }
+
+      return {
+        days,
+        points,
+      };
+    }),
 });

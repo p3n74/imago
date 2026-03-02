@@ -82,6 +82,30 @@ export const teamRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.prisma.authorizedUser.findUnique({
+        where: { id: input.id },
+      });
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      // Never allow removing the final ADMIN role.
+      if (existing.role === "ADMIN" && input.role !== "ADMIN") {
+        const adminCount = await ctx.prisma.authorizedUser.count({
+          where: { role: "ADMIN" },
+        });
+        if (adminCount <= 1) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "At least one administrator is required.",
+          });
+        }
+      }
+
       const user = await ctx.prisma.authorizedUser.update({
         where: { id: input.id },
         data: { role: input.role },
@@ -121,7 +145,7 @@ export const teamRouter = router({
         const adminCount = await ctx.prisma.authorizedUser.count({
           where: { role: "ADMIN" },
         });
-        if (adminCount <= 1 && user.email === ctx.session.user.email) {
+        if (adminCount <= 1) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Cannot remove the last administrator.",

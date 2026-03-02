@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
-import { Loader2, Trash2, UserPlus, Shield } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Shield, Mail } from "lucide-react";
 
 import { NotWhitelistedView } from "@/components/not-whitelisted-view";
 
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/team")({
     const session = await authClient.getSession();
     if (!session.data) {
       throw redirect({
-        to: "/",
+        to: "/login",
       });
     }
     return { session };
@@ -58,21 +58,23 @@ function TeamRoute() {
 
   const teamQueryOptions = trpc.team.list.queryOptions();
   const teamQuery = useQuery({ ...teamQueryOptions, enabled: isWhitelisted });
+  type TeamMember = NonNullable<typeof teamQuery.data>[number];
   
   const isAdmin = myRoleQuery.data?.role === "ADMIN";
 
   const teamUserIds = (teamQuery.data ?? [])
-    .map((u) => u.registeredUser?.id)
-    .filter((id): id is string => !!id);
+    .map((u: TeamMember) => u.registeredUser?.id)
+    .filter((id: string | undefined): id is string => !!id);
   const { statuses: presenceStatuses } = usePresence(teamUserIds, !!teamQuery.data?.length);
 
   const addMemberMutation = useMutation(
     trpc.team.add.mutationOptions({
-      onSuccess: () => {
+      onSuccess: (user) => {
         queryClient.invalidateQueries({ queryKey: teamQueryOptions.queryKey });
         setFormState({ email: "", role: "USER" });
         setIsAddDialogOpen(false);
         toast.success("User authorized successfully");
+        openAccessEmail(user.email, user.role);
       },
       onError: (err) => {
         toast.error(`Failed to add user: ${err.message}`);
@@ -92,6 +94,36 @@ function TeamRoute() {
       }
     }),
   );
+
+  const getAccessEmailContent = (email: string, role: string) => {
+    const appUrl =
+      typeof window !== "undefined" ? `${window.location.origin}/login` : "https://your-domain/login";
+    const subject = "Imago Access Granted";
+    const body = [
+      `Hello ${email},`,
+      "",
+      "You have been granted access to Imago.",
+      `Role: ${role}`,
+      "",
+      `Sign in here: ${appUrl}`,
+      "",
+      "If you expected a different role, contact your administrator.",
+      "",
+      "Best regards,",
+      "Imago Team",
+    ].join("\n");
+
+    return {
+      subject,
+      body,
+      mailto: `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+    };
+  };
+
+  const openAccessEmail = (email: string, role: string) => {
+    const content = getAccessEmailContent(email, role);
+    window.location.href = content.mailto;
+  };
 
   if (myRoleQuery.isLoading) {
     return (
@@ -156,7 +188,7 @@ function TeamRoute() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teamQuery.data?.map((user) => (
+                  {teamQuery.data?.map((user: TeamMember) => (
                     <tr
                       key={user.id}
                       className="border-b border-border/30 last:border-0 hover:bg-muted/20"
@@ -206,15 +238,26 @@ function TeamRoute() {
                       </td>
                       {isAdmin && (
                         <td className="px-5 py-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-rose-500 hover:bg-rose-500/10 hover:text-rose-600"
-                            onClick={() => setConfirmRemoveUserId(user.id)}
-                            disabled={user.email === session.data?.user.email} // Prevent self-delete
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                              onClick={() => openAccessEmail(user.email, user.role)}
+                              title="Send access email"
+                            >
+                              <Mail className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-rose-500 hover:bg-rose-500/10 hover:text-rose-600"
+                              onClick={() => setConfirmRemoveUserId(user.id)}
+                              disabled={user.email === session.data?.user.email} // Prevent self-delete
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
                       )}
                     </tr>

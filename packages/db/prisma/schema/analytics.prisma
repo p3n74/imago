@@ -1,0 +1,18 @@
+model AppMetric {
+  key       String   @id
+  value     BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("app_metric")
+}
+
+model TrafficMetricEvent {
+  id        String   @id @default(cuid())
+  bytes     BigInt
+  kind      String   // preview | download
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([kind])
+  @@map("traffic_metric_event")
+}
