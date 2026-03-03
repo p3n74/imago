@@ -134,8 +134,21 @@ async function main() {
   console.log(`Importing photos from: ${importPath}`);
   console.log(`Previews will be saved to: ${PREVIEWS_BASE}`);
 
-  let count = 0;
-  let skipped = 0;
+  // Build an in-memory lookup once so reruns are fast.
+  // This avoids one DB query per file during large imports.
+  const existingPhotos = await prisma.photo.findMany({
+    select: {
+      id: true,
+      relativePath: true,
+    },
+  });
+  const existingPhotoByRelativePath = new Map(
+    existingPhotos.map((photo) => [photo.relativePath, photo.id])
+  );
+
+  let created = 0;
+  let updated = 0;
+  let skippedExisting = 0;
   let errors = 0;
 
   for await (const relativePath of walkDir(importPath, importPath)) {
@@ -147,6 +160,17 @@ async function main() {
     );
 
     try {
+      const existingId = existingPhotoByRelativePath.get(relativePath);
+      // Fast path: if a photo record already exists and preview file already exists,
+      // skip all expensive work (stat + sharp + db write).
+      if (existingId && existsSync(previewPath)) {
+        skippedExisting++;
+        if (skippedExisting % 200 === 0) {
+          console.log(`Skipped ${skippedExisting} existing photos...`);
+        }
+        continue;
+      }
+
       const statResult = await stat(sourcePath);
       const fileSize = statResult.size;
 
@@ -159,13 +183,9 @@ async function main() {
       const album = getAlbum(relativePath);
       const mimeType = getMimeType(filename);
 
-      const existing = await prisma.photo.findFirst({
-        where: { relativePath },
-      });
-
-      if (existing) {
+      if (existingId) {
         await prisma.photo.update({
-          where: { id: existing.id },
+          where: { id: existingId },
           data: {
             album,
             mimeType,
@@ -174,9 +194,9 @@ async function main() {
             fileSize,
           },
         });
-        skipped++;
+        updated++;
       } else {
-        await prisma.photo.create({
+        const createdPhoto = await prisma.photo.create({
           data: {
             filename,
             relativePath,
@@ -187,11 +207,12 @@ async function main() {
             fileSize,
           },
         });
-        count++;
+        existingPhotoByRelativePath.set(relativePath, createdPhoto.id);
+        created++;
       }
 
-      if ((count + skipped) % 50 === 0) {
-        console.log(`Processed ${count + skipped} photos...`);
+      if ((created + updated + skippedExisting) % 50 === 0) {
+        console.log(`Processed ${created + updated + skippedExisting} photos...`);
       }
     } catch (err) {
       console.error(`Error processing ${relativePath}:`, err);
@@ -199,7 +220,9 @@ async function main() {
     }
   }
 
-  console.log(`\nDone. Imported: ${count}, Updated: ${skipped}, Errors: ${errors}`);
+  console.log(
+    `\nDone. Imported: ${created}, Updated: ${updated}, Skipped existing: ${skippedExisting}, Errors: ${errors}`
+  );
 }
 
 main()
