@@ -88,6 +88,27 @@ Other scripts:
 - Cache cleanup:
   - Files older than `VIDEO_CACHE_MAX_AGE_DAYS` are removed periodically by the server.
   - To clear manually, remove files in `VIDEO_CACHE_PATH`.
+- Performance tuning env vars:
+  - `VIDEO_MAX_CONCURRENT_TRANSCODES` (default `2`) caps parallel ffmpeg jobs.
+  - `VIDEO_CACHE_MAX_SIZE_GB` (default `20`) applies a best-effort cache size guard.
+  - `VIDEO_PERF_LOGS` (default `false`) enables timing logs for cold/warm stream analysis.
+  - `VIDEO_PRETRANSCODE_ON_IMPORT` (default `false`) warms stream cache during import.
+  - `VIDEO_PRETRANSCODE_PROFILE` (`low` or `med`, default `low`) sets import pre-transcode quality.
+
+#### VPS Verification Checklist
+
+1. Enable logs temporarily:
+   - `VIDEO_PERF_LOGS=true`
+2. Restart server and compare:
+   - first play of a video (`cacheHit: false`)
+   - second play of same profile (`cacheHit: true`)
+3. Watch startup latency from logs (`totalMs`) and ffmpeg durations (`transcode complete`).
+4. Test seeking on the same cached stream.
+5. Tune up/down:
+   - lower bitrate/width if CPU is high or startup is slow
+   - increase `VIDEO_MAX_CONCURRENT_TRANSCODES` only if CPU headroom remains
+6. Disable verbose logs after tuning:
+   - `VIDEO_PERF_LOGS=false`
 
 ## Auth & Team
 

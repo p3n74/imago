@@ -220,6 +220,7 @@ function VideosRoute() {
   const initialExpanded = useMemo(() => new Set(parseExpandedSearch(search.expanded)), [search.expanded]);
 
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+  const [selectedQuality, setSelectedQuality] = useState<"low" | "med" | "high">("low");
   const [albumFilter, setAlbumFilter] = useState<string | null>(search.folder ?? null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(initialExpanded);
   const [currentPage, setCurrentPage] = useState<number>(search.page ?? 1);
@@ -356,7 +357,7 @@ function VideosRoute() {
     }
   }, [selectedVideoId, selectedVideo?.filename]);
 
-  const getStreamUrl = useCallback((id: string, quality: "low" | "med" | "high" = "med") => {
+  const getStreamUrl = useCallback((id: string, quality: "low" | "med" | "high" = "low") => {
     const base = import.meta.env.DEV ? "" : env.VITE_SERVER_URL;
     return `${base}/api/videos/stream/${id}?quality=${quality}`;
   }, []);
@@ -381,6 +382,12 @@ function VideosRoute() {
     search.expanded,
     search.page,
   ]);
+
+  useEffect(() => {
+    if (selectedVideoId) {
+      setSelectedQuality("low");
+    }
+  }, [selectedVideoId]);
 
   if (myRoleQuery.isLoading) {
     return (
@@ -595,6 +602,16 @@ function VideosRoute() {
                 <Download className="mr-2 h-4 w-4" />
                 Download Original
               </Button>
+              <select
+                value={selectedQuality}
+                onChange={(e) => setSelectedQuality(e.target.value as "low" | "med" | "high")}
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                aria-label="Stream quality"
+              >
+                <option value="low">Low</option>
+                <option value="med">Medium</option>
+                <option value="high">High</option>
+              </select>
               <DialogClose
                 className={buttonVariants({ variant: "ghost", size: "icon" })}
                 aria-label="Close"
@@ -609,7 +626,7 @@ function VideosRoute() {
                 controls
                 preload="metadata"
                 className="max-h-[70vh] w-full rounded-xl bg-black"
-                src={getStreamUrl(selectedVideoId, "med")}
+                src={getStreamUrl(selectedVideoId, selectedQuality)}
               />
             )}
           </div>

@@ -24,25 +24,39 @@ const VIDEO_CACHE_BASE = env.VIDEO_CACHE_PATH
   ? path.resolve(PROJECT_ROOT, env.VIDEO_CACHE_PATH)
   : DEFAULT_VIDEO_CACHE_PATH;
 const VIDEO_CACHE_MAX_AGE_DAYS = Math.max(1, env.VIDEO_CACHE_MAX_AGE_DAYS);
+const VIDEO_CACHE_MAX_SIZE_BYTES = Math.max(1, env.VIDEO_CACHE_MAX_SIZE_GB) * 1024 * 1024 * 1024;
+const VIDEO_MAX_CONCURRENT_TRANSCODES = Math.max(1, env.VIDEO_MAX_CONCURRENT_TRANSCODES);
+const VIDEO_PERF_LOGS = env.VIDEO_PERF_LOGS;
 
 const activeTranscodes = new Map<string, Promise<void>>();
 let cleanupStarted = false;
 let warnedMissingFfmpeg = false;
+let activeTranscodeCount = 0;
+const transcodeWaiters: Array<() => void> = [];
 
 type StreamProfile = "low" | "med" | "high";
 const STREAM_PROFILES: Record<
   StreamProfile,
   { maxWidth: number; crf: number; videoBitrate: string; audioBitrate: string }
 > = {
-  low: { maxWidth: 854, crf: 30, videoBitrate: "1200k", audioBitrate: "96k" },
-  med: { maxWidth: 1280, crf: 27, videoBitrate: "2500k", audioBitrate: "128k" },
-  high: { maxWidth: 1920, crf: 24, videoBitrate: "4500k", audioBitrate: "160k" },
+  low: { maxWidth: 640, crf: 31, videoBitrate: "900k", audioBitrate: "96k" },
+  med: { maxWidth: 960, crf: 29, videoBitrate: "1700k", audioBitrate: "112k" },
+  high: { maxWidth: 1280, crf: 26, videoBitrate: "3000k", audioBitrate: "128k" },
 };
 
 function getProfile(queryValue: unknown): StreamProfile {
-  if (typeof queryValue !== "string") return "med";
+  if (typeof queryValue !== "string") return "low";
   if (queryValue === "low" || queryValue === "med" || queryValue === "high") return queryValue;
-  return "med";
+  return "low";
+}
+
+function perfLog(message: string, extra?: Record<string, unknown>): void {
+  if (!VIDEO_PERF_LOGS) return;
+  if (extra) {
+    console.info(`[video-perf] ${message}`, extra);
+    return;
+  }
+  console.info(`[video-perf] ${message}`);
 }
 
 async function incrementTrafficMetric(bytesSent: number, kind: string): Promise<void> {
@@ -110,6 +124,7 @@ async function transcodeVideoToCache(
   await ensureDir(path.dirname(cachePath));
   const config = STREAM_PROFILES[profile];
   const scaleFilter = `scale='min(${config.maxWidth},iw)':-2`;
+  const startedAt = Date.now();
 
   await new Promise<void>((resolve, reject) => {
     let ffmpeg: ReturnType<typeof spawn>;
@@ -155,33 +170,64 @@ async function transcodeVideoToCache(
       reject(err);
     });
     ffmpeg.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg failed with code ${code}: ${stderr}`));
+      const elapsedMs = Date.now() - startedAt;
+      if (code === 0) {
+        perfLog("transcode complete", { profile, cachePath, elapsedMs });
+        resolve();
+      } else {
+        perfLog("transcode failed", { profile, cachePath, elapsedMs, code });
+        reject(new Error(`ffmpeg failed with code ${code}: ${stderr}`));
+      }
     });
   });
+}
+
+async function acquireTranscodeSlot(): Promise<void> {
+  if (activeTranscodeCount < VIDEO_MAX_CONCURRENT_TRANSCODES) {
+    activeTranscodeCount += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    transcodeWaiters.push(() => {
+      activeTranscodeCount += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseTranscodeSlot(): void {
+  activeTranscodeCount = Math.max(0, activeTranscodeCount - 1);
+  const next = transcodeWaiters.shift();
+  if (next) next();
 }
 
 async function ensureCachedVideo(
   videoId: string,
   sourcePath: string,
   profile: StreamProfile,
-): Promise<string> {
+): Promise<{ cachePath: string; cacheHit: boolean }> {
   const cachePath = getCachedTranscodePath(videoId, profile);
-  if (existsSync(cachePath)) return cachePath;
+  if (existsSync(cachePath)) return { cachePath, cacheHit: true };
 
   const lockKey = `${videoId}:${profile}`;
   const existingPromise = activeTranscodes.get(lockKey);
   if (existingPromise) {
     await existingPromise;
-    return cachePath;
+    return { cachePath, cacheHit: false };
   }
 
-  const transcodePromise = transcodeVideoToCache(sourcePath, cachePath, profile).finally(() => {
-    activeTranscodes.delete(lockKey);
-  });
+  const transcodePromise = (async () => {
+    await acquireTranscodeSlot();
+    try {
+      await transcodeVideoToCache(sourcePath, cachePath, profile);
+    } finally {
+      releaseTranscodeSlot();
+      activeTranscodes.delete(lockKey);
+    }
+  })();
   activeTranscodes.set(lockKey, transcodePromise);
   await transcodePromise;
-  return cachePath;
+  return { cachePath, cacheHit: false };
 }
 
 async function sendFileWithRange(
@@ -243,18 +289,44 @@ async function cleanupOldCachedVideos(): Promise<void> {
     if (!existsSync(VIDEO_CACHE_BASE)) return;
     const entries = await readdir(VIDEO_CACHE_BASE, { withFileTypes: true });
     const cutoff = Date.now() - VIDEO_CACHE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const filesByOldest: Array<{ fullPath: string; mtimeMs: number; size: number }> = [];
+    let totalSizeBytes = 0;
 
     for (const entry of entries) {
       if (!entry.isFile()) continue;
       const fullPath = path.join(VIDEO_CACHE_BASE, entry.name);
       try {
         const fileStats = await stat(fullPath);
+        totalSizeBytes += fileStats.size;
+        filesByOldest.push({
+          fullPath,
+          mtimeMs: fileStats.mtimeMs,
+          size: fileStats.size,
+        });
         if (fileStats.mtimeMs < cutoff) {
           await rm(fullPath, { force: true });
+          totalSizeBytes -= fileStats.size;
         }
       } catch {
         // best-effort cleanup
       }
+    }
+
+    if (totalSizeBytes > VIDEO_CACHE_MAX_SIZE_BYTES) {
+      filesByOldest.sort((a, b) => a.mtimeMs - b.mtimeMs);
+      for (const file of filesByOldest) {
+        if (totalSizeBytes <= VIDEO_CACHE_MAX_SIZE_BYTES) break;
+        try {
+          await rm(file.fullPath, { force: true });
+          totalSizeBytes -= file.size;
+        } catch {
+          // best-effort cleanup
+        }
+      }
+      perfLog("cache trimmed by size guard", {
+        maxBytes: VIDEO_CACHE_MAX_SIZE_BYTES,
+        remainingBytes: totalSizeBytes,
+      });
     }
   } catch (err) {
     console.warn("Failed to clean up old cached videos:", err);
@@ -273,6 +345,7 @@ export function startVideoCacheCleanupJob(): void {
 }
 
 export async function handleVideoStream(req: Request, res: Response): Promise<void> {
+  const requestStartedAt = Date.now();
   const user = await requireWhitelistedUser(req);
   if (!user) {
     res.status(401).json({ error: "Unauthorized" });
@@ -310,7 +383,7 @@ export async function handleVideoStream(req: Request, res: Response): Promise<vo
 
   const profile = getProfile(req.query.quality);
   try {
-    const cachedPath = await ensureCachedVideo(video.id, sourcePath, profile);
+    const { cachePath: cachedPath, cacheHit } = await ensureCachedVideo(video.id, sourcePath, profile);
     if (!existsSync(cachedPath)) {
       res.status(500).json({ error: "Transcoded stream is unavailable" });
       return;
@@ -324,6 +397,14 @@ export async function handleVideoStream(req: Request, res: Response): Promise<vo
       `${video.filename}.mp4`,
     );
     await incrementTrafficMetric(bytesSent, "video_stream");
+    perfLog("stream served", {
+      videoId: video.id,
+      profile,
+      cacheHit,
+      bytesSent,
+      totalMs: Date.now() - requestStartedAt,
+      range: req.headers.range ?? null,
+    });
   } catch (err) {
     // Local dev fallback when ffmpeg is unavailable: stream original video directly.
     const isSpawnMissing =
@@ -346,6 +427,11 @@ export async function handleVideoStream(req: Request, res: Response): Promise<vo
         video.filename,
       );
       await incrementTrafficMetric(bytesSent, "video_stream_original");
+      perfLog("stream fallback original", {
+        videoId: video.id,
+        bytesSent,
+        totalMs: Date.now() - requestStartedAt,
+      });
       return;
     }
     throw err;

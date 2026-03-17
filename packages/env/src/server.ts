@@ -2,6 +2,12 @@ import "dotenv/config";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+const envBoolean = z
+  .enum(["true", "false"])
+  .optional()
+  .default("false")
+  .transform((value) => value === "true");
+
 export const env = createEnv({
   server: {
     DATABASE_URL: z.string().min(1).optional().default("postgresql://postgres:postgres@localhost:5432/postgres"),
@@ -24,6 +30,16 @@ export const env = createEnv({
     VIDEO_CACHE_PATH: z.string().optional().default("./storage/videos/tmp"),
     // Cleanup threshold (days) for ephemeral video cache files
     VIDEO_CACHE_MAX_AGE_DAYS: z.coerce.number().int().min(1).optional().default(7),
+    // Best-effort cache size guard (GB) for transcoded video cache.
+    VIDEO_CACHE_MAX_SIZE_GB: z.coerce.number().int().min(1).optional().default(20),
+    // Limit simultaneous ffmpeg transcodes to avoid CPU overload on VPS.
+    VIDEO_MAX_CONCURRENT_TRANSCODES: z.coerce.number().int().min(1).optional().default(2),
+    // Enable lightweight stream/transcode timing logs.
+    VIDEO_PERF_LOGS: envBoolean,
+    // Optionally pre-transcode new videos during import.
+    VIDEO_PRETRANSCODE_ON_IMPORT: envBoolean,
+    // Profile used by import pre-transcoding.
+    VIDEO_PRETRANSCODE_PROFILE: z.enum(["low", "med"]).optional().default("low"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

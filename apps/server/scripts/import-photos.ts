@@ -25,6 +25,9 @@ const prisma: any = dbModule.prisma;
 const SERVER_DIR = path.resolve(__dirname, "..");
 const PROJECT_ROOT = path.resolve(SERVER_DIR, "../..");
 const PREVIEWS_BASE = path.join(PROJECT_ROOT, "storage", "photos", "previews");
+const VIDEO_CACHE_BASE = env.VIDEO_CACHE_PATH
+  ? path.resolve(PROJECT_ROOT, env.VIDEO_CACHE_PATH)
+  : path.join(PROJECT_ROOT, "storage", "videos", "tmp");
 
 const IMAGE_EXTENSIONS = new Set<string>([
   ".jpg",
@@ -46,6 +49,17 @@ const VIDEO_EXTENSIONS = new Set<string>([
 
 const PREVIEW_MAX_SIZE = 1200;
 const PREVIEW_QUALITY = 80;
+const VIDEO_PRETRANSCODE_ON_IMPORT = env.VIDEO_PRETRANSCODE_ON_IMPORT;
+const VIDEO_PRETRANSCODE_PROFILE = env.VIDEO_PRETRANSCODE_PROFILE;
+
+type TranscodeProfile = "low" | "med";
+const TRANSCODE_PROFILES: Record<
+  TranscodeProfile,
+  { maxWidth: number; crf: number; videoBitrate: string; audioBitrate: string }
+> = {
+  low: { maxWidth: 640, crf: 31, videoBitrate: "900k", audioBitrate: "96k" },
+  med: { maxWidth: 960, crf: 29, videoBitrate: "1700k", audioBitrate: "112k" },
+};
 
 async function* walkDir(dir: string, baseDir: string): AsyncGenerator<string> {
   let entries: import("node:fs").Dirent[];
@@ -149,6 +163,7 @@ type VideoMetadata = {
 };
 
 let warnedMissingFfprobe = false;
+let warnedMissingFfmpeg = false;
 
 function parseNullableNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -232,6 +247,88 @@ async function getVideoMetadata(sourcePath: string): Promise<VideoMetadata> {
   });
 }
 
+function getCachedTranscodePath(videoId: string, profile: TranscodeProfile): string {
+  return path.join(VIDEO_CACHE_BASE, `${videoId}-${profile}.mp4`);
+}
+
+async function pretranscodeVideo(
+  sourcePath: string,
+  videoId: string,
+  profile: TranscodeProfile,
+): Promise<boolean> {
+  const cachePath = getCachedTranscodePath(videoId, profile);
+  if (existsSync(cachePath)) return true;
+
+  await ensureDir(path.dirname(cachePath));
+  const config = TRANSCODE_PROFILES[profile];
+  const scaleFilter = `scale='min(${config.maxWidth},iw)':-2`;
+
+  return await new Promise<boolean>((resolve) => {
+    let ffmpeg: ReturnType<typeof spawn>;
+    try {
+      ffmpeg = spawn(
+        "ffmpeg",
+        [
+          "-y",
+          "-i",
+          sourcePath,
+          "-vf",
+          scaleFilter,
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          String(config.crf),
+          "-maxrate",
+          config.videoBitrate,
+          "-bufsize",
+          config.videoBitrate,
+          "-c:a",
+          "aac",
+          "-b:a",
+          config.audioBitrate,
+          "-movflags",
+          "+faststart",
+          cachePath,
+        ],
+        { stdio: ["ignore", "ignore", "pipe"] },
+      );
+    } catch (err) {
+      if (!warnedMissingFfmpeg) {
+        warnedMissingFfmpeg = true;
+        console.warn(
+          `ffmpeg not found in PATH (${String(err)}). Skipping pre-transcoding on import.`,
+        );
+      }
+      resolve(false);
+      return;
+    }
+
+    let stderr = "";
+    ffmpeg.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    ffmpeg.on("error", (err) => {
+      if (!warnedMissingFfmpeg) {
+        warnedMissingFfmpeg = true;
+        console.warn(
+          `ffmpeg failed to start (${String(err)}). Skipping pre-transcoding on import.`,
+        );
+      }
+      resolve(false);
+    });
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        resolve(true);
+      } else {
+        console.warn(`ffmpeg pre-transcode failed for ${sourcePath}: ${stderr || `exit ${code}`}`);
+        resolve(false);
+      }
+    });
+  });
+}
+
 async function main() {
   const importPath = path.resolve(PROJECT_ROOT, env.PHOTOS_IMPORT_PATH);
 
@@ -271,6 +368,7 @@ async function main() {
   let photosSkippedExisting = 0;
   let videosCreated = 0;
   let videosSkippedExisting = 0;
+  let videosPretranscoded = 0;
   let errors = 0;
 
   for await (const relativePath of walkDir(importPath, importPath)) {
@@ -363,6 +461,16 @@ async function main() {
         });
         existingVideoByRelativePath.set(relativePath, createdVideo.id);
         videosCreated++;
+        if (VIDEO_PRETRANSCODE_ON_IMPORT) {
+          const pretranscoded = await pretranscodeVideo(
+            sourcePath,
+            createdVideo.id,
+            VIDEO_PRETRANSCODE_PROFILE as TranscodeProfile,
+          );
+          if (pretranscoded) {
+            videosPretranscoded++;
+          }
+        }
       }
 
       const processedTotal =
@@ -384,6 +492,7 @@ async function main() {
     `\nDone.
 Photos -> Imported: ${photosCreated}, Updated: ${photosUpdated}, Skipped existing: ${photosSkippedExisting}
 Videos -> Imported: ${videosCreated}, Skipped existing: ${videosSkippedExisting}
+Videos -> Pre-transcoded (${VIDEO_PRETRANSCODE_PROFILE}): ${videosPretranscoded}
 Errors: ${errors}`
   );
 }
