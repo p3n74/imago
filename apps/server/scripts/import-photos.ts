@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readdir, mkdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
 import dotenv from "dotenv";
 import sharp from "sharp";
 
@@ -17,14 +18,15 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const { env } = await import("@template/env/server");
-const { prisma } = await import("@template/db");
+const dbModule = await import("@template/db");
+const prisma: any = dbModule.prisma;
 
 // Resolve paths: .env is in apps/server, storage is at project root
 const SERVER_DIR = path.resolve(__dirname, "..");
 const PROJECT_ROOT = path.resolve(SERVER_DIR, "../..");
 const PREVIEWS_BASE = path.join(PROJECT_ROOT, "storage", "photos", "previews");
 
-const IMAGE_EXTENSIONS = new Set([
+const IMAGE_EXTENSIONS = new Set<string>([
   ".jpg",
   ".jpeg",
   ".png",
@@ -32,12 +34,21 @@ const IMAGE_EXTENSIONS = new Set([
   ".heic",
   ".heif",
 ]);
+const VIDEO_EXTENSIONS = new Set<string>([
+  ".mp4",
+  ".mov",
+  ".mkv",
+  ".avi",
+  ".m4v",
+  ".wmv",
+  ".webm",
+]);
 
 const PREVIEW_MAX_SIZE = 1200;
 const PREVIEW_QUALITY = 80;
 
 async function* walkDir(dir: string, baseDir: string): AsyncGenerator<string> {
-  let entries: { name: string }[];
+  let entries: import("node:fs").Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch (err) {
@@ -53,7 +64,10 @@ async function* walkDir(dir: string, baseDir: string): AsyncGenerator<string> {
       yield* walkDir(fullPath, baseDir);
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name).toLowerCase();
-      if (IMAGE_EXTENSIONS.has(ext)) {
+      // Skip AppleDouble metadata files (e.g. "._IMG_001.jpg")
+      if (entry.name.startsWith("._")) continue;
+
+      if (IMAGE_EXTENSIONS.has(ext) || VIDEO_EXTENSIONS.has(ext)) {
         yield relativePath.replace(/\\/g, "/");
       }
     }
@@ -108,6 +122,13 @@ function getMimeType(filename: string): string {
     ".webp": "image/webp",
     ".heic": "image/heic",
     ".heif": "image/heif",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
+    ".m4v": "video/x-m4v",
+    ".wmv": "video/x-ms-wmv",
+    ".webm": "video/webm",
   };
   return mime[ext] ?? "application/octet-stream";
 }
@@ -119,6 +140,96 @@ function getAlbum(relativePath: string): string {
   if (segments.length <= 1) return "default";
   const folderPath = segments.slice(0, -1).join("/");
   return folderPath || "default";
+}
+
+type VideoMetadata = {
+  durationSeconds: number | null;
+  width: number | null;
+  height: number | null;
+};
+
+let warnedMissingFfprobe = false;
+
+function parseNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+async function getVideoMetadata(sourcePath: string): Promise<VideoMetadata> {
+  return new Promise((resolve) => {
+    const args = [
+      "-v",
+      "error",
+      "-print_format",
+      "json",
+      "-show_streams",
+      "-show_format",
+      sourcePath,
+    ];
+    let ffprobe: ReturnType<typeof spawn>;
+    try {
+      ffprobe = spawn("ffprobe", args, {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (err) {
+      if (!warnedMissingFfprobe) {
+        warnedMissingFfprobe = true;
+        console.warn(
+          "ffprobe not found in PATH. Video metadata will be imported as unknown (duration/resolution null).",
+        );
+      }
+      resolve({ durationSeconds: null, width: null, height: null });
+      return;
+    }
+
+    let stdout = "";
+    let stderr = "";
+    ffprobe.stdout?.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    ffprobe.stderr?.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    ffprobe.on("error", (err) => {
+      if (!warnedMissingFfprobe) {
+        warnedMissingFfprobe = true;
+        console.warn(
+          `ffprobe failed to start (${String(err)}). Video metadata will be imported as unknown.`,
+        );
+      }
+      resolve({ durationSeconds: null, width: null, height: null });
+    });
+
+    ffprobe.on("close", (code) => {
+      if (code !== 0) {
+        console.warn(`ffprobe failed for ${sourcePath}: ${stderr.trim() || `exit code ${code}`}`);
+        resolve({ durationSeconds: null, width: null, height: null });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(stdout) as {
+          streams?: Array<{ codec_type?: string; width?: number; height?: number }>;
+          format?: { duration?: string | number };
+        };
+        const videoStream =
+          parsed.streams?.find((stream) => stream.codec_type === "video") ?? null;
+
+        resolve({
+          durationSeconds: parseNullableNumber(parsed.format?.duration ?? null),
+          width: parseNullableNumber(videoStream?.width ?? null),
+          height: parseNullableNumber(videoStream?.height ?? null),
+        });
+      } catch (err) {
+        console.warn(`Failed to parse ffprobe output for ${sourcePath}:`, err);
+        resolve({ durationSeconds: null, width: null, height: null });
+      }
+    });
+  });
 }
 
 async function main() {
@@ -143,76 +254,125 @@ async function main() {
     },
   });
   const existingPhotoByRelativePath = new Map(
-    existingPhotos.map((photo) => [photo.relativePath, photo.id])
+    existingPhotos.map((photo: { id: string; relativePath: string }) => [photo.relativePath, photo.id])
+  );
+  const existingVideos = await prisma.video.findMany({
+    select: {
+      id: true,
+      relativePath: true,
+    },
+  });
+  const existingVideoByRelativePath = new Map(
+    existingVideos.map((video: { id: string; relativePath: string }) => [video.relativePath, video.id])
   );
 
-  let created = 0;
-  let updated = 0;
-  let skippedExisting = 0;
+  let photosCreated = 0;
+  let photosUpdated = 0;
+  let photosSkippedExisting = 0;
+  let videosCreated = 0;
+  let videosSkippedExisting = 0;
   let errors = 0;
 
   for await (const relativePath of walkDir(importPath, importPath)) {
     const sourcePath = path.join(importPath, relativePath);
     const filename = path.basename(relativePath);
+    const ext = path.extname(filename).toLowerCase();
     const previewPath = path.join(
       PREVIEWS_BASE,
       relativePath.replace(/\.[^.]+$/, ".webp")
     );
 
     try {
-      const existingId = existingPhotoByRelativePath.get(relativePath);
-      // Fast path: if a photo record already exists and preview file already exists,
-      // skip all expensive work (stat + sharp + db write).
-      if (existingId && existsSync(previewPath)) {
-        skippedExisting++;
-        if (skippedExisting % 200 === 0) {
-          console.log(`Skipped ${skippedExisting} existing photos...`);
+      if (IMAGE_EXTENSIONS.has(ext)) {
+        const existingId = existingPhotoByRelativePath.get(relativePath);
+        // Fast path: if a photo record already exists and preview file already exists,
+        // skip all expensive work (stat + sharp + db write).
+        if (existingId && existsSync(previewPath)) {
+          photosSkippedExisting++;
+          if (photosSkippedExisting % 200 === 0) {
+            console.log(`Skipped ${photosSkippedExisting} existing photos...`);
+          }
+          continue;
         }
-        continue;
-      }
 
-      const statResult = await stat(sourcePath);
-      const fileSize = statResult.size;
+        const statResult = await stat(sourcePath);
+        const fileSize = statResult.size;
 
-      const dimensions = await generatePreview(sourcePath, previewPath);
-      if (!dimensions) {
-        errors++;
-        continue;
-      }
+        const dimensions = await generatePreview(sourcePath, previewPath);
+        if (!dimensions) {
+          errors++;
+          continue;
+        }
 
-      const album = getAlbum(relativePath);
-      const mimeType = getMimeType(filename);
+        const album = getAlbum(relativePath);
+        const mimeType = getMimeType(filename);
 
-      if (existingId) {
-        await prisma.photo.update({
-          where: { id: existingId },
-          data: {
-            album,
-            mimeType,
-            width: dimensions.width,
-            height: dimensions.height,
-            fileSize,
-          },
-        });
-        updated++;
-      } else {
-        const createdPhoto = await prisma.photo.create({
+        if (existingId) {
+          await prisma.photo.update({
+            where: { id: existingId },
+            data: {
+              album,
+              mimeType,
+              width: dimensions.width,
+              height: dimensions.height,
+              fileSize,
+            },
+          });
+          photosUpdated++;
+        } else {
+          const createdPhoto = await prisma.photo.create({
+            data: {
+              filename,
+              relativePath,
+              album,
+              mimeType,
+              width: dimensions.width,
+              height: dimensions.height,
+              fileSize,
+            },
+          });
+          existingPhotoByRelativePath.set(relativePath, createdPhoto.id);
+          photosCreated++;
+        }
+      } else if (VIDEO_EXTENSIONS.has(ext)) {
+        const existingVideoId = existingVideoByRelativePath.get(relativePath);
+        if (existingVideoId) {
+          videosSkippedExisting++;
+          if (videosSkippedExisting % 200 === 0) {
+            console.log(`Skipped ${videosSkippedExisting} existing videos...`);
+          }
+          continue;
+        }
+
+        const statResult = await stat(sourcePath);
+        const fileSize = statResult.size;
+        const album = getAlbum(relativePath);
+        const mimeType = getMimeType(filename);
+        const metadata = await getVideoMetadata(sourcePath);
+        const createdVideo = await prisma.video.create({
           data: {
             filename,
             relativePath,
             album,
             mimeType,
-            width: dimensions.width,
-            height: dimensions.height,
+            durationSeconds: metadata.durationSeconds,
+            width: metadata.width,
+            height: metadata.height,
             fileSize,
           },
         });
-        existingPhotoByRelativePath.set(relativePath, createdPhoto.id);
-        created++;
+        existingVideoByRelativePath.set(relativePath, createdVideo.id);
+        videosCreated++;
       }
 
-      if ((created + updated + skippedExisting) % 50 === 0) {
-        console.log(`Processed ${created + updated + skippedExisting} photos...`);
+      const processedTotal =
+        photosCreated +
+        photosUpdated +
+        photosSkippedExisting +
+        videosCreated +
+        videosSkippedExisting;
+      if (processedTotal % 50 === 0) {
+        console.log(`Processed ${processedTotal} media files...`);
       }
     } catch (err) {
       console.error(`Error processing ${relativePath}:`, err);
@@ -221,7 +381,10 @@ async function main() {
   }
 
   console.log(
-    `\nDone. Imported: ${created}, Updated: ${updated}, Skipped existing: ${skippedExisting}, Errors: ${errors}`
+    `\nDone.
+Photos -> Imported: ${photosCreated}, Updated: ${photosUpdated}, Skipped existing: ${photosSkippedExisting}
+Videos -> Imported: ${videosCreated}, Skipped existing: ${videosSkippedExisting}
+Errors: ${errors}`
   );
 }
 

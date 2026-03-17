@@ -32,6 +32,10 @@ FROM base AS runner
 # Set production environment
 ENV NODE_ENV=production
 
+# Video support requires ffmpeg/ffprobe at runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
 # Google Cloud Run sets PORT environment variable automatically
 # The app will use PORT if set, otherwise defaults to 3000
 ENV PORT=3002

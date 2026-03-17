@@ -20,6 +20,10 @@ export const env = createEnv({
     CHAT_ENCRYPTION_KEY: z.string().min(16).optional().default("template-chat-dev-key"),
     // Path where user copies their photo folder for bulk import (e.g. /data/photos or ./import/photos)
     PHOTOS_IMPORT_PATH: z.string().optional().default("./import/photos"),
+    // Optional path for ephemeral transcoded video cache
+    VIDEO_CACHE_PATH: z.string().optional().default("./storage/videos/tmp"),
+    // Cleanup threshold (days) for ephemeral video cache files
+    VIDEO_CACHE_MAX_AGE_DAYS: z.coerce.number().int().min(1).optional().default(7),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

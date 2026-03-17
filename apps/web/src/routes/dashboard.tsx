@@ -127,10 +127,12 @@ function RouteComponent() {
   };
 
   const photoCount = analyticsQuery.data?.photoCount ?? 0;
+  const videoCount = analyticsQuery.data?.videoCount ?? 0;
   const totalStorageBytes = analyticsQuery.data?.totalStorageBytes ?? 0;
   const totalTrafficBytes = Number(BigInt(analyticsQuery.data?.totalTrafficBytes ?? "0"));
 
   const photosPercent = getLogScaledPercent(photoCount, 100_000);
+  const videosPercent = getLogScaledPercent(videoCount, 100_000);
   const storagePercent = getLogScaledPercent(totalStorageBytes, 5 * 1024 * 1024 * 1024 * 1024);
   const trafficPercent = getLogScaledPercent(totalTrafficBytes, 20 * 1024 * 1024 * 1024 * 1024);
 
@@ -189,7 +191,7 @@ function RouteComponent() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>Total photos</CardTitle>
@@ -202,6 +204,23 @@ function RouteComponent() {
               <>
                 <p className="text-3xl font-semibold">{photoCount.toLocaleString()}</p>
                 {metricBars(photosPercent, "bg-blue-500")}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Total videos</CardTitle>
+            <CardDescription>Indexed video library items</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {analyticsQuery.isLoading ? (
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            ) : (
+              <>
+                <p className="text-3xl font-semibold">{videoCount.toLocaleString()}</p>
+                {metricBars(videosPercent, "bg-amber-500")}
               </>
             )}
           </CardContent>

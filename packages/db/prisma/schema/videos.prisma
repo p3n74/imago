@@ -1,0 +1,18 @@
+model Video {
+  id              String    @id @default(cuid())
+  filename        String
+  relativePath    String // e.g. "Family/2024/Holiday/clip_001.mp4" - preserves folder structure
+  album           String? // full folder path without filename for grouping/tree rendering
+  mimeType        String
+  durationSeconds Float?
+  width           Int?
+  height          Int?
+  fileSize        Int?
+  takenAt         DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([album])
+  @@index([takenAt])
+  @@index([createdAt])
+  @@map("video")
+}

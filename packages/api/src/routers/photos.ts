@@ -98,9 +98,15 @@ export const photosRouter = router({
   }),
 
   getAnalytics: whitelistedProcedure.query(async ({ ctx }) => {
-    const [photoCount, photoSizeAgg, totalTrafficMetric] = await Promise.all([
+    const [photoCount, videoCount, photoSizeAgg, videoSizeAgg, totalTrafficMetric] = await Promise.all([
       ctx.prisma.photo.count(),
+      ctx.prisma.video.count(),
       ctx.prisma.photo.aggregate({
+        _sum: {
+          fileSize: true,
+        },
+      }),
+      ctx.prisma.video.aggregate({
         _sum: {
           fileSize: true,
         },
@@ -112,7 +118,8 @@ export const photosRouter = router({
 
     return {
       photoCount,
-      totalStorageBytes: photoSizeAgg._sum.fileSize ?? 0,
+      videoCount,
+      totalStorageBytes: (photoSizeAgg._sum.fileSize ?? 0) + (videoSizeAgg._sum.fileSize ?? 0),
       totalTrafficBytes: totalTrafficMetric?.value.toString() ?? "0",
     };
   }),

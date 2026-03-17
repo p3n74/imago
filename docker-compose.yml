@@ -33,10 +33,14 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - PHOTOS_IMPORT_PATH=${PHOTOS_IMPORT_PATH:-/data/photos}
+      - VIDEO_CACHE_PATH=${VIDEO_CACHE_PATH:-/app/storage/videos/tmp}
+      - VIDEO_CACHE_MAX_AGE_DAYS=${VIDEO_CACHE_MAX_AGE_DAYS:-7}
     volumes:
       - photos_import:/data/photos
       - photos_previews:/app/storage/photos/previews
+      - videos_cache:/app/storage/videos/tmp
 
 volumes:
   photos_import:
   photos_previews:
+  videos_cache:

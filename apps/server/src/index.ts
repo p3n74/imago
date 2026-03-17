@@ -82,6 +82,7 @@ console.log("Initializing application modules (async)...");
       { createContext, setWsEmitter, setPresenceGetter },
       { emitToAll, emitToUser, getPresenceMap, initWebSocket },
       { handlePreview, handleDownload },
+      { handleVideoStream, handleVideoDownload, startVideoCacheCleanupJob },
     ] = await Promise.all([
       import("@template/api/routers/index"),
       import("@template/auth"),
@@ -91,6 +92,7 @@ console.log("Initializing application modules (async)...");
       import("@template/api/context"), // This will import db internally
       import("./websocket"),
       import("./photos-routes"),
+      import("./videos-routes"),
     ]);
 
     const cors = corsModule.default;
@@ -147,6 +149,15 @@ console.log("Initializing application modules (async)...");
       "/api/photos/download/:id",
       (req, res, next) => handleDownload(req, res).catch(next)
     );
+    app.get(
+      "/api/videos/stream/:id",
+      (req, res, next) => handleVideoStream(req, res).catch(next)
+    );
+    app.get(
+      "/api/videos/download/:id",
+      (req, res, next) => handleVideoDownload(req, res).catch(next)
+    );
+    startVideoCacheCleanupJob();
 
     // Health check endpoint for WebSocket status
     app.get("/ws/health", (_req, res) => {

@@ -33,6 +33,7 @@ A private photo gallery with compressed previews and full-resolution download. S
 
 - [Bun](https://bun.sh/)
 - PostgreSQL database
+- [FFmpeg](https://ffmpeg.org/) (required for video metadata and on-demand transcoding)
 
 ### Installation
 
@@ -75,6 +76,18 @@ Other scripts:
    ```bash
    bun run photos:import
    ```
+
+### Video Support
+
+- Supported import formats include common containers: MP4, MOV, MKV, AVI, M4V, WMV, WEBM.
+- Videos are indexed during `bun run photos:import` using `ffprobe` metadata.
+- Streaming endpoint: `/api/videos/stream/:id`
+  - Streams a compressed MP4 generated on first request.
+  - Uses ephemeral cache at `VIDEO_CACHE_PATH` (default `./storage/videos/tmp`).
+- Download endpoint: `/api/videos/download/:id` for original files.
+- Cache cleanup:
+  - Files older than `VIDEO_CACHE_MAX_AGE_DAYS` are removed periodically by the server.
+  - To clear manually, remove files in `VIDEO_CACHE_PATH`.
 
 ## Auth & Team
 
