@@ -6,6 +6,11 @@ import { mkdir, stat, readdir, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { auth } from "@template/auth";
 import { prisma } from "@template/db";
+import {
+  canAccessTopFolder,
+  loadMediaPermissionContext,
+  resolveTopFolderFromMedia,
+} from "@template/db/media-permissions";
 import { env } from "@template/env/server";
 import { fromNodeHeaders } from "better-auth/node";
 
@@ -66,7 +71,9 @@ async function incrementTrafficMetric(bytesSent: number, kind: string): Promise<
   ]);
 }
 
-async function requireWhitelistedUser(req: Request): Promise<{ email: string } | null> {
+async function requireWhitelistedUser(
+  req: Request,
+): Promise<{ email: string; role: string } | null> {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
@@ -77,7 +84,7 @@ async function requireWhitelistedUser(req: Request): Promise<{ email: string } |
     where: { email: session.user.email },
   });
 
-  return authorized ? { email: session.user.email } : null;
+  return authorized ? { email: session.user.email, role: authorized.role } : null;
 }
 
 function getOriginalVideoPath(relativePath: string): string {
@@ -283,6 +290,17 @@ export async function handleVideoStream(req: Request, res: Response): Promise<vo
     res.status(404).json({ error: "Video not found" });
     return;
   }
+  if (user.role !== "ADMIN") {
+    const permissionContext = await loadMediaPermissionContext(prisma, user.email);
+    const topFolder = resolveTopFolderFromMedia({
+      album: video.album,
+      relativePath: video.relativePath,
+    });
+    if (!canAccessTopFolder(topFolder, permissionContext)) {
+      res.status(404).json({ error: "Video not found" });
+      return;
+    }
+  }
 
   const sourcePath = getOriginalVideoPath(video.relativePath);
   if (!existsSync(sourcePath)) {
@@ -351,6 +369,17 @@ export async function handleVideoDownload(req: Request, res: Response): Promise<
   if (!video) {
     res.status(404).json({ error: "Video not found" });
     return;
+  }
+  if (user.role !== "ADMIN") {
+    const permissionContext = await loadMediaPermissionContext(prisma, user.email);
+    const topFolder = resolveTopFolderFromMedia({
+      album: video.album,
+      relativePath: video.relativePath,
+    });
+    if (!canAccessTopFolder(topFolder, permissionContext)) {
+      res.status(404).json({ error: "Video not found" });
+      return;
+    }
   }
 
   const sourcePath = getOriginalVideoPath(video.relativePath);

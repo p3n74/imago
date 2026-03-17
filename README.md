@@ -95,6 +95,22 @@ Other scripts:
 - **Roles**: `ADMIN` (manage team) and `USER` (view photos).
 - Manage users on the Team page.
 
+### Top-Level Folder Permissions
+
+- Permissions apply to Photos/Videos pages and media file endpoints.
+- Controls are top-level folders only (for example, `Family`, `Trips`).
+- Global behavior is allow-by-default.
+- Admins can mark a top-level folder as deny-by-default:
+  - Folder is hidden from everyone unless explicitly allowed per user.
+- Admins can grant per-user folder access overrides for deny-by-default folders.
+- Direct URL access to preview/download/stream endpoints follows the same folder rules.
+
+After pulling changes, apply schema updates:
+
+```bash
+bun run db:push
+```
+
 ## License
 
 MIT

@@ -5,6 +5,11 @@ import { createReadStream, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { auth } from "@template/auth";
 import { prisma } from "@template/db";
+import {
+  canAccessTopFolder,
+  loadMediaPermissionContext,
+  resolveTopFolderFromMedia,
+} from "@template/db/media-permissions";
 import { env } from "@template/env/server";
 import { fromNodeHeaders } from "better-auth/node";
 
@@ -45,7 +50,9 @@ async function incrementTrafficMetric(
   ]);
 }
 
-async function requireWhitelistedUser(req: Request): Promise<{ email: string } | null> {
+async function requireWhitelistedUser(
+  req: Request,
+): Promise<{ email: string; role: string } | null> {
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
   });
@@ -56,7 +63,7 @@ async function requireWhitelistedUser(req: Request): Promise<{ email: string } |
     where: { email: session.user.email },
   });
 
-  return authorized ? { email: session.user.email } : null;
+  return authorized ? { email: session.user.email, role: authorized.role } : null;
 }
 
 function getPreviewPath(relativePath: string): string {
@@ -86,6 +93,17 @@ export async function handlePreview(req: Request, res: Response): Promise<void> 
   if (!photo) {
     res.status(404).json({ error: "Photo not found" });
     return;
+  }
+  if (user.role !== "ADMIN") {
+    const permissionContext = await loadMediaPermissionContext(prisma, user.email);
+    const topFolder = resolveTopFolderFromMedia({
+      album: photo.album,
+      relativePath: photo.relativePath,
+    });
+    if (!canAccessTopFolder(topFolder, permissionContext)) {
+      res.status(404).json({ error: "Photo not found" });
+      return;
+    }
   }
 
   const filePath = getPreviewPath(photo.relativePath);
@@ -121,6 +139,17 @@ export async function handleDownload(req: Request, res: Response): Promise<void>
   if (!photo) {
     res.status(404).json({ error: "Photo not found" });
     return;
+  }
+  if (user.role !== "ADMIN") {
+    const permissionContext = await loadMediaPermissionContext(prisma, user.email);
+    const topFolder = resolveTopFolderFromMedia({
+      album: photo.album,
+      relativePath: photo.relativePath,
+    });
+    if (!canAccessTopFolder(topFolder, permissionContext)) {
+      res.status(404).json({ error: "Photo not found" });
+      return;
+    }
   }
 
   const filePath = getOriginalPath(photo.relativePath);

@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
-import { Loader2, Trash2, UserPlus, Shield, Mail } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Shield, Mail, LockKeyhole } from "lucide-react";
 
 import { NotWhitelistedView } from "@/components/not-whitelisted-view";
 
@@ -47,6 +47,8 @@ function TeamRoute() {
   const { session } = Route.useRouteContext();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [confirmRemoveUserId, setConfirmRemoveUserId] = useState<string | null>(null);
+  const [permissionsUserEmail, setPermissionsUserEmail] = useState<string | null>(null);
+  const [permissionsUserLabel, setPermissionsUserLabel] = useState<string | null>(null);
   const [formState, setFormState] = useState({
     email: "",
     role: "USER",
@@ -61,6 +63,7 @@ function TeamRoute() {
   type TeamMember = NonNullable<typeof teamQuery.data>[number];
   
   const isAdmin = myRoleQuery.data?.role === "ADMIN";
+  const isPermissionsDialogOpen = permissionsUserEmail !== null;
 
   const teamUserIds = (teamQuery.data ?? [])
     .map((u: TeamMember) => u.registeredUser?.id)
@@ -92,6 +95,57 @@ function TeamRoute() {
       onError: (err) => {
         toast.error(`Failed to remove user: ${err.message}`);
       }
+    }),
+  );
+
+  const topFoldersQueryOptions = trpc.team.listTopFolders.queryOptions();
+  const topFoldersQuery = useQuery({
+    ...topFoldersQueryOptions,
+    enabled: isAdmin,
+  });
+  const folderPoliciesQueryOptions = trpc.team.listFolderPolicies.queryOptions();
+  const folderPoliciesQuery = useQuery({
+    ...folderPoliciesQueryOptions,
+    enabled: isAdmin,
+  });
+  const deniedFolders = (folderPoliciesQuery.data ?? [])
+    .filter((p) => p.defaultDeny)
+    .map((p) => p.folder);
+  const deniedFolderSet = new Set(deniedFolders);
+
+  const userFolderPermissionsQueryOptions = trpc.team.listUserFolderPermissions.queryOptions(
+    { email: permissionsUserEmail ?? "" },
+  );
+  const userFolderPermissionsQuery = useQuery({
+    ...userFolderPermissionsQueryOptions,
+    enabled: isAdmin && !!permissionsUserEmail,
+  });
+  const allowedFolderSet = new Set(
+    (userFolderPermissionsQuery.data ?? [])
+      .filter((p) => p.allow)
+      .map((p) => p.folder),
+  );
+
+  const setFolderPolicyMutation = useMutation(
+    trpc.team.setFolderPolicy.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: folderPoliciesQueryOptions.queryKey });
+        toast.success("Folder policy updated");
+      },
+      onError: (err) => {
+        toast.error(`Failed to update folder policy: ${err.message}`);
+      },
+    }),
+  );
+
+  const setUserFolderPermissionMutation = useMutation(
+    trpc.team.setUserFolderPermission.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: userFolderPermissionsQueryOptions.queryKey });
+      },
+      onError: (err) => {
+        toast.error(`Failed to update folder access: ${err.message}`);
+      },
     }),
   );
 
@@ -243,6 +297,18 @@ function TeamRoute() {
                               variant="ghost"
                               size="icon"
                               className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                              onClick={() => {
+                                setPermissionsUserEmail(user.email);
+                                setPermissionsUserLabel(user.registeredUser?.name ?? user.email);
+                              }}
+                              title="Manage folder access"
+                            >
+                              <LockKeyhole className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                               onClick={() => openAccessEmail(user.email, user.role)}
                               title="Send access email"
                             >
@@ -275,6 +341,69 @@ function TeamRoute() {
           )}
         </CardContent>
       </Card>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Top-Level Folder Policies</CardTitle>
+            <CardDescription>
+              Mark folders as hidden by default. Hidden folders only appear for users you explicitly
+              allow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {topFoldersQuery.isLoading || folderPoliciesQuery.isLoading ? (
+              <div className="py-8 text-center text-muted-foreground">Loading folder policies...</div>
+            ) : (topFoldersQuery.data?.length ?? 0) === 0 ? (
+              <div className="py-8 text-center text-muted-foreground">
+                No folders detected yet. Import media first.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-y border-border/50 bg-muted/30 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-5 py-3 font-medium">Top Folder</th>
+                      <th className="px-5 py-3 font-medium">Deny by Default</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(topFoldersQuery.data ?? []).map((folder) => {
+                      const isDenied = deniedFolderSet.has(folder);
+                      const isSaving =
+                        setFolderPolicyMutation.isPending &&
+                        setFolderPolicyMutation.variables?.folder === folder;
+                      return (
+                        <tr key={folder} className="border-b border-border/30 last:border-0">
+                          <td className="px-5 py-4 font-medium">{folder}</td>
+                          <td className="px-5 py-4">
+                            <label className="inline-flex cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-input"
+                                checked={isDenied}
+                                disabled={isSaving}
+                                onChange={(e) => {
+                                  setFolderPolicyMutation.mutate({
+                                    folder,
+                                    defaultDeny: e.target.checked,
+                                  });
+                                }}
+                              />
+                              <span className="text-muted-foreground">
+                                {isDenied ? "Hidden unless allowed" : "Visible to all"}
+                              </span>
+                            </label>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogPopup>
@@ -339,6 +468,78 @@ function TeamRoute() {
         }}
         loading={removeMemberMutation.isPending}
       />
+
+      <Dialog
+        open={isPermissionsDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPermissionsUserEmail(null);
+            setPermissionsUserLabel(null);
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Folder Access Overrides</DialogTitle>
+            <DialogDescription>
+              {permissionsUserLabel
+                ? `Grant access for deny-by-default folders to ${permissionsUserLabel}.`
+                : "Grant access for deny-by-default folders."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!permissionsUserEmail ? null : deniedFolders.length === 0 ? (
+            <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+              No folders are deny-by-default right now.
+            </div>
+          ) : userFolderPermissionsQuery.isLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="max-h-[45vh] space-y-2 overflow-auto pr-1">
+              {deniedFolders.map((folder) => {
+                const isAllowed = allowedFolderSet.has(folder);
+                const isSaving =
+                  setUserFolderPermissionMutation.isPending &&
+                  setUserFolderPermissionMutation.variables?.folder === folder &&
+                  setUserFolderPermissionMutation.variables?.email === permissionsUserEmail;
+                return (
+                  <label
+                    key={folder}
+                    className="flex items-center justify-between rounded-md border px-3 py-2"
+                  >
+                    <div>
+                      <p className="font-medium">{folder}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isAllowed ? "Allowed for this user" : "Hidden for this user"}
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={isAllowed}
+                      disabled={isSaving}
+                      onChange={(e) => {
+                        if (!permissionsUserEmail) return;
+                        setUserFolderPermissionMutation.mutate({
+                          email: permissionsUserEmail,
+                          folder,
+                          allow: e.target.checked,
+                        });
+                      }}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <DialogClose className={buttonVariants({ variant: "outline" })}>Close</DialogClose>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </div>
   );
 }

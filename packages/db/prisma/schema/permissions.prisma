@@ -1,0 +1,29 @@
+model FolderPolicy {
+  id          String   @id @default(cuid())
+  folder      String   @unique // top-level folder, e.g. "Family"
+  defaultDeny Boolean  @default(false)
+  createdBy   String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([defaultDeny])
+  @@index([updatedAt])
+  @@map("folder_policy")
+}
+
+model FolderPermission {
+  id        String   @id @default(cuid())
+  email     String
+  folder    String // top-level folder, e.g. "Family"
+  allow     Boolean  @default(true)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([email, folder])
+  @@index([email])
+  @@index([folder])
+  @@index([allow])
+  @@map("folder_permission")
+}
